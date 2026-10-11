@@ -20,14 +20,14 @@
     <h1>Jarak Aman Layar Monitor</h1>
     <p>Teknologi Rekayasa Elektronika, Politeknik Negeri Batam</p>
   </div>
-  <span id="conn" class="pill">Mode demo</span>
+  <span id="conn" class="pill" role="status">Menghubungkan</span>
 </header>
 
 <main>
   <!-- 1. Ilustrasi utama -->
   <section class="card scene-card" aria-live="polite">
     <p id="status" class="status">Menunggu data</p>
-    <p id="saran" class="saran">Nyalakan mode demo atau hubungkan alat.</p>
+    <p id="saran" class="saran">Pilih Real-time untuk data dari ESP32, atau Demo untuk simulasi.</p>
 
     <svg id="scene" class="s-none" viewBox="0 0 640 230" role="img" aria-label="Ilustrasi jarak mata ke layar monitor">
       <rect x="76"  y="20" width="134" height="150" class="z bad"/>
@@ -76,6 +76,7 @@
       <p class="lbl">Tingkat risiko mata</p>
       <p class="val"><b id="risiko">–</b> / 100</p>
       <div class="bar"><i id="barFill"></i></div>
+      <p class="sub" id="durasiKet">Durasi di depan layar: –</p>
     </article>
   </section>
 
@@ -104,8 +105,12 @@
       <p class="sub">Kalimat suara mengikuti jarak, cahaya, dan hasil fuzzy, ditambah pengingat istirahat mata.</p>
     </div>
     <div>
-      <h2>Mode demo</h2>
-      <label class="sw"><input type="checkbox" id="demoOn"> Pakai data simulasi</label>
+      <h2>Mode data</h2>
+      <div class="seg" role="group" aria-label="Pilih sumber data">
+        <button type="button" id="modeRT" class="on" aria-pressed="true">Real-time</button>
+        <button type="button" id="modeDemo" aria-pressed="false">Demo</button>
+      </div>
+      <p class="sub" id="modeKet">Data berasal dari ESP32 lewat broker MQTT.</p>
       <div id="demoBox">
         <label class="lbl" for="sj">Jarak: <b id="dj">60</b> cm</label>
         <input type="range" id="sj" min="5" max="120" value="60">

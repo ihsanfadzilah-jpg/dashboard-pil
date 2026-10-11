@@ -4,12 +4,14 @@ const X0 = 76, SKALA = 5.34;      // posisi layar dan skala cm -> piksel pada ga
 const MAX_RIWAYAT = 40;
 
 let demoOn = CONFIG.demoAwal, brokerOn = false;
+let lastData = 0, lastD = null, sepi = false;
 let statusLama = "";
 let target = 60, tampilJarak = 60;
 const riwayat = [];
 
 /* ---------- Tampilkan satu data ke seluruh dashboard ---------- */
 function tampil(d) {
+  if (d.status === "Kritis") d.status = "Bahaya";
   const st = d.status;
   $("status").textContent = st;
   $("status").className = "status " + st;
@@ -19,6 +21,7 @@ function tampil(d) {
   $("cahaya").textContent = d.cahaya;
   $("cahayaKet").textContent = d.cahaya < 100 ? "Ruangan gelap" : (d.cahaya < 350 ? "Pencahayaan normal" : "Ruangan terang");
   $("risiko").textContent = d.risiko;
+  $("durasiKet").textContent = "Durasi di depan layar: " + (d.durasi === undefined ? "–" : d.durasi + " menit");
   $("barFill").style.width = d.risiko + "%";
   $("barFill").parentNode.style.setProperty("--sc", "var(--" + (st === "Aman" ? "ok" : st === "Waspada" ? "warn" : "bad") + ")");
 
@@ -60,43 +63,77 @@ function animasi() {
 
 /* Suara AI ada di js/suara.js */
 
-/* ---------- Mode demo ---------- */
+/* ---------- Mode data: Real-time / Demo ---------- */
+const espOnline = () => Date.now() - lastData < CONFIG.offlineDetik * 1000;
+
 function kirimDemo() {
   const jarak = +$("sj").value, cahaya = +$("sc").value;
   $("dj").textContent = jarak; $("dc").textContent = cahaya;
   const risiko = Math.round(hitungRisiko(jarak, cahaya));
   tampil({ jarak, cahaya, risiko, status: tentukanStatus(risiko) });
 }
-function aturDemo() {
-  $("demoBox").classList.toggle("buka", demoOn);
-  setPill();
-  if (demoOn) kirimDemo();
+
+function tampilMenunggu() {
+  $("status").textContent = "Menunggu ESP32";
+  $("status").className = "status";
+  $("scene").setAttribute("class", "s-none");
+  $("saran").textContent = "Nyalakan ESP32 dan pastikan terhubung ke WiFi. Data muncul otomatis.";
+  $("jarak").textContent = "–"; $("cahaya").textContent = "–"; $("risiko").textContent = "–";
+  $("cahayaKet").textContent = "–"; $("durasiKet").textContent = "Durasi di depan layar: –";
+  $("barFill").style.width = "0%";
 }
-$("demoOn").onchange = e => { demoOn = e.target.checked; aturDemo(); };
+
+function setPill() {
+  const p = $("conn");
+  let teks, kelas = "";
+  if (demoOn)             { teks = "Mode demo"; kelas = " on"; }
+  else if (!brokerOn)     { teks = "Real-time: broker terputus"; }
+  else if (!espOnline())  { teks = "Real-time: menunggu ESP32"; kelas = " wait"; }
+  else                    { teks = "Real-time: ESP32 aktif"; kelas = " on"; }
+  p.textContent = teks;
+  p.className = "pill" + kelas;
+}
+
+function aturMode(demo) {
+  demoOn = demo;
+  $("modeRT").classList.toggle("on", !demo);   $("modeRT").setAttribute("aria-pressed", String(!demo));
+  $("modeDemo").classList.toggle("on", demo);  $("modeDemo").setAttribute("aria-pressed", String(demo));
+  $("demoBox").classList.toggle("buka", demo);
+  $("modeKet").textContent = demo ? "Data berasal dari slider simulasi di bawah."
+                                  : "Data berasal dari ESP32 lewat broker MQTT.";
+  setPill();
+  if (demo) kirimDemo();
+  else if (lastD && espOnline()) tampil(lastD);
+  else tampilMenunggu();
+}
+$("modeRT").onclick   = () => aturMode(false);
+$("modeDemo").onclick = () => aturMode(true);
 $("sj").oninput = kirimDemo;
 $("sc").oninput = kirimDemo;
 
-/* ---------- Status koneksi ---------- */
-function setPill() {
-  const p = $("conn");
-  p.textContent = demoOn ? "Mode demo" : (brokerOn ? "Terhubung ke broker" : "Terputus");
-  p.className = "pill" + (demoOn || brokerOn ? " on" : "");
-}
-
 /* ---------- MQTT (data dari ESP32) ---------- */
 function sambungMQTT() {
-  if (typeof mqtt === "undefined") return;
-  const c = mqtt.connect(CONFIG.broker);
+  if (typeof mqtt === "undefined") { setPill(); return; }
+  const c = mqtt.connect(CONFIG.broker, { clientId: "dash-" + Math.random().toString(16).slice(2, 8), reconnectPeriod: 3000 });
   c.on("connect", () => { brokerOn = true; c.subscribe(CONFIG.topic); setPill(); });
   c.on("close",   () => { brokerOn = false; setPill(); });
   c.on("message", (_, payload) => {
-    if (demoOn) return;
-    try { tampil(JSON.parse(payload.toString())); } catch (e) {}
+    let d;
+    try { d = JSON.parse(payload.toString()); } catch (e) { return; }
+    if (typeof d.jarak !== "number" || typeof d.cahaya !== "number") return;
+    lastData = Date.now(); lastD = d; sepi = false;
+    if (!demoOn) tampil(d);
+    setPill();
   });
 }
 
+/* Cek berkala: tandai ESP32 terputus bila data berhenti */
+setInterval(() => {
+  setPill();
+  if (!demoOn && lastD && !espOnline() && !sepi) { sepi = true; tampilMenunggu(); }
+}, 1000);
+
 /* ---------- Mulai ---------- */
-$("demoOn").checked = demoOn;
-aturDemo();
+aturMode(CONFIG.demoAwal);
 animasi();
 sambungMQTT();
